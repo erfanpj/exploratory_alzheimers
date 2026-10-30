@@ -1,74 +1,76 @@
-using CSV, DataFrames, Statistics, PrettyTables
+# Entry point. Run from the repository folder:
+#   julia --project=. alzheimers_data_analysis.jl [--data FILE] [--out DIR] [--min-age N]
+# Reproduces the original tables (now with denominators) and writes CSV outputs to results/.
+using CSV, DataFrames, PrettyTables
+include(joinpath(@__DIR__, "src", "AlzheimersEDA.jl"))
+using .AlzheimersEDA
 
-# Load dataset
-df = CSV.read("alzheimers_disease_data.csv", DataFrame)
-
-#------------------------------------------------------------Clean Data Function-----------------------------------------------------------------------------
-function clean_data!(data)
-    # Handle missing values (if any)
-    dropmissing!(data)
-    # Define columns to keep
-    main_cols = [:Age, :Gender, :Smoking,
-                        :Diabetes, :Depression, :Diagnosis]
-    # Remove duplicate rows
-    unique!(data)
-    # Select only the specified columns for final output
-    select!(data, main_cols)
-    return data
+function parse_args(args)
+    opts = Dict("data" => joinpath(@__DIR__, "alzheimers_disease_data.csv"), "out" => joinpath(@__DIR__, "results"),
+                "min-age" => "70")
+    i = 1
+    while i <= length(args)
+        key = replace(args[i], r"^--" => "")
+        (haskey(opts, key) && i < length(args)) || (println(stderr, "usage: julia --project=. alzheimers_data_analysis.jl [--data FILE] [--out DIR] [--min-age N]"); exit(2))
+        opts[key] = args[i + 1]
+        i += 2
+    end
+    min_age = tryparse(Float64, opts["min-age"])
+    min_age === nothing && (println(stderr, "error: --min-age must be a number, got \"$(opts["min-age"])\""); exit(2))
+    return opts["data"], opts["out"], min_age
 end
-# Clean the DataFrame
-cleaned_df = clean_data!(df)
-#------------------------------------------------------------Sort and filter the DataFrame-----------------------------------------------------------------------------
-# Sort the DataFrame
-sort_df = sort!(cleaned_df, :Diagnosis, rev=true)
-# Filter on Age > 70 the DataFrame
-filter_df = filter(row -> row.Age > 70, cleaned_df)
 
-# Display the cleaned table
-println("Sorted clean data(First 5 rows):")
-pretty_table(first(sort_df, 5))
+function show_table(title, df)
+    println(title)
+    nrow(df) == 0 ? println("  (no rows match this selection)") : pretty_table(df)
+end
 
-println("First 5 Rows on age > 70:")
-pretty_table(first(filter_df, 5))
-#----------------------------------------------------------Alzheimer's cases by Diabetes--------------------------------------------------------------------------------
-# Count Alzheimer's cases by Diabetes
-alzheimers_count_diabetes= combine(groupby(filter(row -> row.Diagnosis == 1, cleaned_df), :Diabetes), 
-                           nrow => :Alzheimer_Count)
+function main(args)
+    data_path, out_dir, min_age = parse_args(args)
+    raw = load_data(data_path)
+    clean, report = clean_data(raw)
+    mkpath(out_dir)
 
-# Display table
-println("Alzheimer's cases by diabetes:")
-pretty_table(alzheimers_count_diabetes)
-#---------------------------------------------------simple data Analysis of Alzheimer's Cases--------------------------------------------------------------------
-# Count Alzheimer's cases
-alzheimers_count =filter(row -> row.Diagnosis == 1, cleaned_df)
-                          
-#Create a dictionary to convert 0 and 1 into meaningful names
-gender_labels = Dict(0 => "Male", 1 => "Female")
-smoking_labels = Dict(0 => "No", 1 => "Yes")
+    println("Data: synthetic Kaggle Alzheimer's Disease Dataset (CC BY 4.0, see DATA.md). Not real patients.")
+    println("Cleaning: $(report.rows_in) rows read, $(report.removed_missing) removed for missing values, " *
+            "$(report.removed_duplicates) duplicate rows removed, $(report.removed_invalid_codes) removed for invalid codes, " *
+            "$(report.rows_out) rows used.")
+    invalid = filter(r -> r.n_invalid > 0 || r.n_missing > 0, validate_data(raw))
+    println(nrow(invalid) == 0 ? "Validation: all documented codes and ranges respected." : "Validation issues:")
+    nrow(invalid) == 0 || pretty_table(invalid)
 
-# Convert Gender and Smoking columns to readable labels
-alzheimers_count.Gender = [gender_labels[g] for g in alzheimers_count.Gender]
-alzheimers_count.Smoking = [smoking_labels[s] for s in alzheimers_count.Smoking]
+    sorted = sort(clean, :Diagnosis, rev = true)
+    show_table("Sorted clean data (first 5 rows):", first(sorted, 5))
+    older = select_rows(clean; min_age = min_age)
+    show_table("First 5 rows with age > $(min_age) ($(nrow(older)) of $(nrow(clean)) rows):", first(older, 5))
 
-# Compute necessary statistics for Age
-age_stats = DataFrame(Statistic=["Mean", "Median", "Std Dev", "Min", "Max"], 
-                      Value=[mean(alzheimers_count.Age), median(alzheimers_count.Age), 
-                             std(alzheimers_count.Age), minimum(alzheimers_count.Age), 
-                             maximum(alzheimers_count.Age)])
+    cases = select_rows(clean; diagnosis = 1)
+    println("Rows with Diagnosis = 1 (Alzheimer's in the synthetic data): $(nrow(cases)) of $(nrow(clean)).")
+    by_diabetes = count_by(cases, :Diabetes)
+    show_table("Cases by diabetes (share of cases, not a risk):", by_diabetes)
+    ages = age_summary(cases)
+    show_table("Age of cases:", ages)
+    by_gender = count_by(cases, :Gender)
+    show_table("Gender of cases:", by_gender)
+    by_smoking = count_by(cases, :Smoking)
+    show_table("Smoking among cases:", by_smoking)
 
+    CSV.write(joinpath(out_dir, "cleaning_report.csv"), DataFrame([report]))
+    CSV.write(joinpath(out_dir, "validation.csv"), validate_data(raw))
+    CSV.write(joinpath(out_dir, "cases_by_diabetes.csv"), by_diabetes)
+    CSV.write(joinpath(out_dir, "cases_age_summary.csv"), ages)
+    CSV.write(joinpath(out_dir, "cases_by_gender.csv"), by_gender)
+    CSV.write(joinpath(out_dir, "cases_by_smoking.csv"), by_smoking)
+    println("Tables written to $(out_dir).")
+    return 0
+end
 
-# Compute gender and smoking counts on Alzheimer's cases
-gender_counts = combine(groupby(alzheimers_count, :Gender), nrow => :Count)
-smoking_counts = combine(groupby(alzheimers_count, :Smoking), nrow => :Count)
-#-------------------------------------------------------------------show tables----------------------------------------------------------------------------------
-# Display the summary tables on Alzheimer's cases
-println("Age Statistics:")
-pretty_table(age_stats)
-
-println("\nGender Distribution:")
-pretty_table(gender_counts)
-
-println("\nSmoking Distribution:")
-pretty_table(smoking_counts)
-
-
+if abspath(PROGRAM_FILE) == @__FILE__
+    try
+        exit(main(ARGS))
+    catch e
+        e isa ArgumentError || rethrow()
+        println(stderr, "error: ", e.msg)
+        exit(2)
+    end
+end
