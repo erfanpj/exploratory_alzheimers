@@ -7,10 +7,16 @@ module AlzheimersEDA
 using CSV, DataFrames, Statistics
 
 export load_data, validate_data, clean_data, select_rows, age_summary, count_by, label_codes,
-       MAIN_COLUMNS, CODE_LABELS
+       wilson_ci, age_band, prevalence_by, numeric_by_diagnosis, svg_prevalence, svg_histogram,
+       MAIN_COLUMNS, ANALYSIS_COLUMNS, PREVALENCE_COLUMNS, CODE_LABELS
 
 # Columns used by the original analysis.
 const MAIN_COLUMNS = [:Age, :Gender, :Smoking, :Diabetes, :Depression, :Diagnosis]
+
+# Columns used by the descriptive analysis (E2.03).
+const PREVALENCE_COLUMNS = [:Gender, :Smoking, :Diabetes, :Depression, :FamilyHistoryAlzheimers,
+                            :MemoryComplaints, :BehavioralProblems]
+const ANALYSIS_COLUMNS = unique(vcat(MAIN_COLUMNS, PREVALENCE_COLUMNS, [:MMSE, :FunctionalAssessment, :ADL]))
 
 # Allowed codes and readable labels, from the Kaggle data card.
 const CODE_LABELS = Dict{Symbol,Dict{Int,String}}(
@@ -150,6 +156,161 @@ function count_by(df::AbstractDataFrame, col::Symbol)
     g = combine(groupby(df, col; sort = true), nrow => :count)
     groups = haskey(CODE_LABELS, col) ? label_codes(col, g[!, col]) : string.(g[!, col])
     return DataFrame(group = groups, count = g.count, denominator = fill(total, nrow(g)), share = g.count ./ total)
+end
+
+"""
+    wilson_ci(k, n; z = 1.959964) -> (lo, hi)
+
+Wilson score interval for a proportion k/n (95% by default). Returns `(missing, missing)` when n is 0.
+"""
+function wilson_ci(k::Integer, n::Integer; z = 1.959964)
+    (0 <= k <= n) || throw(ArgumentError("need 0 <= k <= n, got k=$k, n=$n"))
+    n == 0 && return (missing, missing)
+    p = k / n
+    centre = (p + z^2 / (2n)) / (1 + z^2 / n)
+    half = z * sqrt(p * (1 - p) / n + z^2 / (4n^2)) / (1 + z^2 / n)
+    return (max(0.0, centre - half), min(1.0, centre + half))
+end
+
+"""
+    age_band(age) -> String
+
+Five-year bands over the documented 60–90 range; the last band is 85–90 because 90 is the documented maximum.
+"""
+function age_band(age::Real)
+    (60 <= age <= 90) || throw(ArgumentError("age $age outside the documented 60–90 range"))
+    lo = min(60 + 5 * fld(Int(floor(age)) - 60, 5), 85)
+    return lo == 85 ? "85–90" : "$(lo)–$(lo + 4)"
+end
+
+"""
+    prevalence_by(df, col) -> DataFrame
+
+For each group of `col` (or `:AgeBand`): rows `n`, rows with Diagnosis = 1 `cases`, the proportion and a Wilson 95%
+interval. Proportions describe this synthetic sample only.
+"""
+function prevalence_by(df::AbstractDataFrame, col::Symbol)
+    out = DataFrame(variable = String[], group = String[], n = Int[], cases = Int[], proportion = Float64[],
+                    ci95_low = Float64[], ci95_high = Float64[])
+    nrow(df) == 0 && return out
+    key = col == :AgeBand ? age_band.(df.Age) : df[!, col]
+    tmp = DataFrame(key = key, dx = df.Diagnosis)
+    g = combine(groupby(tmp, :key; sort = true), nrow => :n, :dx => (x -> count(==(1), x)) => :cases)
+    labels = col == :AgeBand ? string.(g.key) : (haskey(CODE_LABELS, col) ? label_codes(col, g.key) : string.(g.key))
+    for (lab, n, k) in zip(labels, g.n, g.cases)
+        lo, hi = wilson_ci(k, n)
+        push!(out, (String(col), lab, n, k, k / n, lo, hi))
+    end
+    return out
+end
+
+"""
+    numeric_by_diagnosis(df, col) -> DataFrame
+
+n, mean, standard deviation, quartiles, min and max of a numeric column, split by Diagnosis.
+"""
+function numeric_by_diagnosis(df::AbstractDataFrame, col::Symbol)
+    out = DataFrame(variable = String[], diagnosis = String[], n = Int[], mean = Float64[], sd = Float64[],
+                    q1 = Float64[], median = Float64[], q3 = Float64[], min = Float64[], max = Float64[])
+    for d in (0, 1)
+        v = Float64.(df[df.Diagnosis .== d, col])
+        isempty(v) && continue
+        q = quantile(v, [0.25, 0.5, 0.75])
+        push!(out, (String(col), CODE_LABELS[:Diagnosis][d], length(v), mean(v), length(v) > 1 ? std(v) : NaN,
+                    q[1], q[2], q[3], minimum(v), maximum(v)))
+    end
+    return out
+end
+
+_esc(s) = replace(string(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "\"" => "&quot;")
+_f(x) = string(round(x; digits = 1))
+
+"""
+    svg_prevalence(tbl, title) -> String
+
+Dot-and-interval chart of `prevalence_by` rows: one line per group with the proportion, its 95% interval and the
+label "cases/n", so every point shows its denominator. The axis runs from 0 to 100%.
+"""
+function svg_prevalence(tbl::AbstractDataFrame, title::AbstractString; overall = nothing)
+    left, right, top, rowh = 300, 140, 76, 22
+    plotw = 420
+    nrows = nrow(tbl) + count(i -> i == 1 || tbl.variable[i] != tbl.variable[i-1], 1:nrow(tbl))
+    h = top + rowh * nrows + 50
+    w = left + plotw + right
+    x(p) = left + p * plotw
+    io = IOBuffer()
+    print(io, """<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h" font-family="sans-serif" font-size="12">\n""")
+    print(io, """<rect width="$w" height="$h" fill="white"/>\n""")
+    print(io, """<text x="10" y="20" font-size="14" font-weight="bold">$(_esc(title))</text>\n""")
+    print(io, """<text x="10" y="38" fill="#555">Synthetic data. Share of rows with Diagnosis = 1 per group, with Wilson 95% intervals. Labels: cases/n.</text>\n""")
+    for t in 0:0.25:1
+        print(io, """<line x1="$(_f(x(t)))" y1="$(top - 8)" x2="$(_f(x(t)))" y2="$(h - 40)" stroke="#ddd"/>""")
+        print(io, """<text x="$(_f(x(t)))" y="$(h - 24)" text-anchor="middle" fill="#555">$(Int(t * 100))%</text>\n""")
+    end
+    if overall !== nothing
+        print(io, """<line x1="$(_f(x(overall)))" y1="$(top - 8)" x2="$(_f(x(overall)))" y2="$(h - 40)" stroke="#999" stroke-dasharray="4 3"/>""")
+        print(io, """<text x="$(_f(x(overall)))" y="$(top - 12)" text-anchor="middle" fill="#555">all rows $(round(overall * 100; digits = 1))%</text>\n""")
+    end
+    y = top
+    for i in 1:nrow(tbl)
+        if i == 1 || tbl.variable[i] != tbl.variable[i-1]
+            print(io, """<text x="10" y="$(y + 15)" font-weight="bold">$(_esc(tbl.variable[i]))</text>\n""")
+            y += rowh
+        end
+        cy = y + 11
+        print(io, """<text x="30" y="$(cy + 4)">$(_esc(tbl.group[i]))</text>""")
+        print(io, """<line x1="$(_f(x(tbl.ci95_low[i])))" y1="$cy" x2="$(_f(x(tbl.ci95_high[i])))" y2="$cy" stroke="#1f5fa8" stroke-width="2"/>""")
+        print(io, """<circle cx="$(_f(x(tbl.proportion[i])))" cy="$cy" r="4" fill="#1f5fa8"/>""")
+        print(io, """<text x="$(left + plotw + 10)" y="$(cy + 4)">$(round(tbl.proportion[i] * 100; digits = 1))% ($(tbl.cases[i])/$(tbl.n[i]))</text>\n""")
+        y += rowh
+    end
+    print(io, "</svg>\n")
+    return String(take!(io))
+end
+
+"""
+    svg_histogram(df, col, edges, title) -> String
+
+Side-by-side counts of `col` per bin, split by Diagnosis, with the group sizes in the legend. Bins are [a, b) except
+the last, which includes its upper edge.
+"""
+function svg_histogram(df::AbstractDataFrame, col::Symbol, edges::AbstractVector, title::AbstractString)
+    nb = length(edges) - 1
+    counts = zeros(Int, 2, nb)
+    for (v, d) in zip(df[!, col], df.Diagnosis)
+        b = v >= edges[end] ? nb : searchsortedlast(edges, v)
+        (1 <= b <= nb) && (counts[d + 1, b] += 1)
+    end
+    ns = [count(==(0), df.Diagnosis), count(==(1), df.Diagnosis)]
+    left, top, ploth, binw = 60, 92, 260, 36
+    w = left + binw * nb + 40
+    h = top + ploth + 60
+    ymax = max(1, maximum(counts))
+    yv(c) = top + ploth - c / ymax * ploth
+    colors = ("#9aa5b1", "#1f5fa8")
+    io = IOBuffer()
+    print(io, """<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h" font-family="sans-serif" font-size="12">\n""")
+    print(io, """<rect width="$w" height="$h" fill="white"/>\n""")
+    print(io, """<text x="10" y="20" font-size="14" font-weight="bold">$(_esc(title))</text>\n""")
+    for d in 0:1
+        lx = 10 + d * 230
+        print(io, """<rect x="$lx" y="32" width="12" height="12" fill="$(colors[d + 1])"/>""")
+        print(io, """<text x="$(lx + 18)" y="42">Diagnosis = $d ($(CODE_LABELS[:Diagnosis][d])), n = $(ns[d + 1])</text>\n""")
+    end
+    print(io, """<text x="10" y="60" fill="#555">Synthetic data. Bar height = number of rows in the bin (not a share).</text>\n""")
+    for b in 1:nb, d in 0:1
+        c = counts[d + 1, b]
+        bx = left + (b - 1) * binw + 3 + d * 15
+        print(io, """<rect x="$bx" y="$(_f(yv(c)))" width="14" height="$(_f(top + ploth - yv(c)))" fill="$(colors[d + 1])"><title>$(edges[b])–$(edges[b + 1]): $c</title></rect>\n""")
+    end
+    for b in 1:(nb + 1)
+        print(io, """<text x="$(left + (b - 1) * binw)" y="$(top + ploth + 16)" text-anchor="middle" fill="#555">$(edges[b])</text>\n""")
+    end
+    print(io, """<line x1="$left" y1="$(top + ploth)" x2="$(left + binw * nb)" y2="$(top + ploth)" stroke="#333"/>\n""")
+    print(io, """<text x="$left" y="$(top - 8)" fill="#555">tallest bar = $ymax rows</text>\n""")
+    print(io, """<text x="$(left + binw * nb ÷ 2)" y="$(top + ploth + 36)" text-anchor="middle">$(_esc(String(col)))</text>\n""")
+    print(io, "</svg>\n")
+    return String(take!(io))
 end
 
 end # module

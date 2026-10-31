@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="742" viewBox="0 0 860 742" font-family="sans-serif" font-size="12">
+<rect width="860" height="742" fill="white"/>
+<text x="10" y="20" font-size="14" font-weight="bold">Share of rows with Diagnosis = 1, by group (synthetic data, n = 2149)</text>
+<text x="10" y="38" fill="#555">Synthetic data. Share of rows with Diagnosis = 1 per group, with Wilson 95% intervals. Labels: cases/n.</text>
+<line x1="300.0" y1="68" x2="300.0" y2="702" stroke="#ddd"/><text x="300.0" y="718" text-anchor="middle" fill="#555">0%</text>
+<line x1="405.0" y1="68" x2="405.0" y2="702" stroke="#ddd"/><text x="405.0" y="718" text-anchor="middle" fill="#555">25%</text>
+<line x1="510.0" y1="68" x2="510.0" y2="702" stroke="#ddd"/><text x="510.0" y="718" text-anchor="middle" fill="#555">50%</text>
+<line x1="615.0" y1="68" x2="615.0" y2="702" stroke="#ddd"/><text x="615.0" y="718" text-anchor="middle" fill="#555">75%</text>
+<line x1="720.0" y1="68" x2="720.0" y2="702" stroke="#ddd"/><text x="720.0" y="718" text-anchor="middle" fill="#555">100%</text>
+<line x1="448.5" y1="68" x2="448.5" y2="702" stroke="#999" stroke-dasharray="4 3"/><text x="448.5" y="64" text-anchor="middle" fill="#555">all rows 35.4%</text>
+<text x="10" y="91" font-weight="bold">AgeBand</text>
+<text x="30" y="113">60–64</text><line x1="439.6" y1="109" x2="482.7" y2="109" stroke="#1f5fa8" stroke-width="2"/><circle cx="460.6" cy="109" r="4" fill="#1f5fa8"/><text x="730" y="113">38.2% (130/340)</text>
+<text x="30" y="135">65–69</text><line x1="420.0" y1="131" x2="460.7" y2="131" stroke="#1f5fa8" stroke-width="2"/><circle cx="439.6" cy="131" r="4" fill="#1f5fa8"/><text x="730" y="135">33.2% (120/361)</text>
+<text x="30" y="157">70–74</text><line x1="422.5" y1="153" x2="463.6" y2="153" stroke="#1f5fa8" stroke-width="2"/><circle cx="442.4" cy="153" r="4" fill="#1f5fa8"/><text x="730" y="157">33.9% (121/357)</text>
+<text x="30" y="179">75–79</text><line x1="430.1" y1="175" x2="472.3" y2="175" stroke="#1f5fa8" stroke-width="2"/><circle cx="450.5" cy="175" r="4" fill="#1f5fa8"/><text x="730" y="179">35.8% (124/346)</text>
+<text x="30" y="201">80–84</text><line x1="428.5" y1="197" x2="471.3" y2="197" stroke="#1f5fa8" stroke-width="2"/><circle cx="449.2" cy="197" r="4" fill="#1f5fa8"/><text x="730" y="201">35.5% (119/335)</text>
+<text x="30" y="223">85–90</text><line x1="430.7" y1="219" x2="469.5" y2="219" stroke="#1f5fa8" stroke-width="2"/><circle cx="449.6" cy="219" r="4" fill="#1f5fa8"/><text x="730" y="223">35.6% (146/410)</text>
+<text x="10" y="245" font-weight="bold">Gender</text>
+<text x="30" y="267">Male</text><line x1="440.9" y1="263" x2="465.1" y2="263" stroke="#1f5fa8" stroke-width="2"/><circle cx="452.8" cy="263" r="4" fill="#1f5fa8"/><text x="730" y="267">36.4% (386/1061)</text>
+<text x="30" y="289">Female</text><line x1="432.8" y1="285" x2="456.4" y2="285" stroke="#1f5fa8" stroke-width="2"/><circle cx="444.4" cy="285" r="4" fill="#1f5fa8"/><text x="730" y="289">34.4% (374/1088)</text>
+<text x="10" y="311" font-weight="bold">Smoking</text>
+<text x="30" y="333">No</text><line x1="439.2" y1="329" x2="459.4" y2="329" stroke="#1f5fa8" stroke-width="2"/><circle cx="449.2" cy="329" r="4" fill="#1f5fa8"/><text x="730" y="333">35.5% (543/1529)</text>
+<text x="30" y="355">Yes</text><line x1="431.7" y1="351" x2="463.1" y2="351" stroke="#1f5fa8" stroke-width="2"/><circle cx="447.0" cy="351" r="4" fill="#1f5fa8"/><text x="730" y="355">35.0% (217/620)</text>
+<text x="10" y="377" font-weight="bold">Diabetes</text>
+<text x="30" y="399">No</text><line x1="442.1" y1="395" x2="460.6" y2="395" stroke="#1f5fa8" stroke-width="2"/><circle cx="451.2" cy="395" r="4" fill="#1f5fa8"/><text x="730" y="399">36.0% (657/1825)</text>
+<text x="30" y="421">Yes</text><line x1="413.2" y1="417" x2="455.6" y2="417" stroke="#1f5fa8" stroke-width="2"/><circle cx="433.5" cy="417" r="4" fill="#1f5fa8"/><text x="730" y="421">31.8% (103/324)</text>
+<text x="10" y="443" font-weight="bold">Depression</text>
+<text x="30" y="465">No</text><line x1="439.8" y1="461" x2="458.8" y2="461" stroke="#1f5fa8" stroke-width="2"/><circle cx="449.1" cy="461" r="4" fill="#1f5fa8"/><text x="730" y="465">35.5% (610/1718)</text>
+<text x="30" y="487">Yes</text><line x1="427.9" y1="483" x2="465.5" y2="483" stroke="#1f5fa8" stroke-width="2"/><circle cx="446.2" cy="483" r="4" fill="#1f5fa8"/><text x="730" y="487">34.8% (150/431)</text>
+<text x="10" y="509" font-weight="bold">FamilyHistoryAlzheimers</text>
+<text x="30" y="531">No</text><line x1="442.6" y1="527" x2="462.4" y2="527" stroke="#1f5fa8" stroke-width="2"/><circle cx="452.4" cy="527" r="4" fill="#1f5fa8"/><text x="730" y="531">36.3% (583/1607)</text>
+<text x="30" y="553">Yes</text><line x1="421.1" y1="549" x2="454.2" y2="549" stroke="#1f5fa8" stroke-width="2"/><circle cx="437.2" cy="549" r="4" fill="#1f5fa8"/><text x="730" y="553">32.7% (177/542)</text>
+<text x="10" y="575" font-weight="bold">MemoryComplaints</text>
+<text x="30" y="597">No</text><line x1="408.2" y1="593" x2="426.1" y2="593" stroke="#1f5fa8" stroke-width="2"/><circle cx="417.0" cy="593" r="4" fill="#1f5fa8"/><text x="730" y="597">27.8% (474/1702)</text>
+<text x="30" y="619">Yes</text><line x1="549.6" y1="615" x2="586.8" y2="615" stroke="#1f5fa8" stroke-width="2"/><circle cx="568.7" cy="615" r="4" fill="#1f5fa8"/><text x="730" y="619">64.0% (286/447)</text>
+<text x="10" y="641" font-weight="bold">BehavioralProblems</text>
+<text x="30" y="663">No</text><line x1="420.4" y1="659" x2="438.2" y2="659" stroke="#1f5fa8" stroke-width="2"/><circle cx="429.1" cy="659" r="4" fill="#1f5fa8"/><text x="730" y="663">30.7% (557/1812)</text>
+<text x="30" y="685">Yes</text><line x1="530.7" y1="681" x2="574.3" y2="681" stroke="#1f5fa8" stroke-width="2"/><circle cx="553.0" cy="681" r="4" fill="#1f5fa8"/><text x="730" y="685">60.2% (203/337)</text>
+</svg>

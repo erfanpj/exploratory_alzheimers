@@ -1,12 +1,16 @@
 # Entry point. Run from the repository folder:
 #   julia --project=. alzheimers_data_analysis.jl [--data FILE] [--out DIR] [--min-age N]
-# Reproduces the original tables (now with denominators) and writes CSV outputs to results/.
+# Part 1 reproduces the original tables (now with denominators). Part 2 adds descriptive tables with 95% intervals
+# and two SVG figures. All outputs go to results/. The data is synthetic: nothing here is a clinical finding.
 using CSV, DataFrames, PrettyTables
 include(joinpath(@__DIR__, "src", "AlzheimersEDA.jl"))
 using .AlzheimersEDA
 
+const DEFAULT_OUT = joinpath(@__DIR__, "results")
+const MMSE_EDGES = collect(0:3:30)
+
 function parse_args(args)
-    opts = Dict("data" => joinpath(@__DIR__, "alzheimers_disease_data.csv"), "out" => joinpath(@__DIR__, "results"),
+    opts = Dict("data" => joinpath(@__DIR__, "alzheimers_disease_data.csv"), "out" => DEFAULT_OUT,
                 "min-age" => "70")
     i = 1
     while i <= length(args)
@@ -22,7 +26,8 @@ end
 
 function show_table(title, df)
     println(title)
-    nrow(df) == 0 ? println("  (no rows match this selection)") : pretty_table(df)
+    nrow(df) == 0 ? println("  (no rows match this selection)") :
+        pretty_table(df; fit_table_in_display_horizontally = false, fit_table_in_display_vertically = false)
 end
 
 function main(args)
@@ -61,7 +66,31 @@ function main(args)
     CSV.write(joinpath(out_dir, "cases_age_summary.csv"), ages)
     CSV.write(joinpath(out_dir, "cases_by_gender.csv"), by_gender)
     CSV.write(joinpath(out_dir, "cases_by_smoking.csv"), by_smoking)
-    println("Tables written to $(out_dir).")
+
+    # Part 2: descriptive tables over more columns (E2.03).
+    full, full_report = clean_data(raw; columns = ANALYSIS_COLUMNS)
+    println()
+    println("Descriptive tables: $(full_report.rows_out) rows after the same cleaning over $(length(ANALYSIS_COLUMNS)) columns.")
+    println("Proportion = rows with Diagnosis = 1 in the group / rows in the group, with a Wilson 95% interval.")
+    println("These describe how the synthetic generator assigned diagnoses; they are not risks, causes or clinical findings.")
+    k = count(==(1), full.Diagnosis); n = nrow(full); lo, hi = wilson_ci(k, n)
+    println("All rows: $k/$n = $(round(100k / n; digits = 1))% (95% interval $(round(100lo; digits = 1))–$(round(100hi; digits = 1))%)")
+    prev = vcat(prevalence_by(full, :AgeBand), (prevalence_by(full, c) for c in PREVALENCE_COLUMNS)...)
+    show_table("Diagnosis = 1 by group:", transform(prev, [:proportion, :ci95_low, :ci95_high] .=> ByRow(x -> round(x; digits = 3)); renamecols = false))
+    numeric = vcat((numeric_by_diagnosis(full, c) for c in (:MMSE, :FunctionalAssessment, :ADL))...)
+    show_table("Scores by diagnosis (MMSE 0–30, FunctionalAssessment 0–10, ADL 0–10):",
+               transform(numeric, Not([:variable, :diagnosis, :n]) .=> ByRow(x -> round(x; digits = 2)); renamecols = false))
+
+    r6(df) = transform(df, names(df, Float64) .=> ByRow(x -> round(x; digits = 6)); renamecols = false)
+    CSV.write(joinpath(out_dir, "prevalence_by_group.csv"), r6(prev))
+    CSV.write(joinpath(out_dir, "scores_by_diagnosis.csv"), r6(numeric))
+    fig_dir = joinpath(out_dir, "figures")
+    mkpath(fig_dir)
+    write(joinpath(fig_dir, "diagnosis_share_by_group.svg"),
+          svg_prevalence(prev, "Share of rows with Diagnosis = 1, by group (synthetic data, n = $n)"; overall = k / n))
+    write(joinpath(fig_dir, "mmse_by_diagnosis.svg"),
+          svg_histogram(full, :MMSE, MMSE_EDGES, "MMSE score by diagnosis (synthetic data, n = $n)"))
+    println("Tables and figures written to $(out_dir == DEFAULT_OUT ? "results/" : out_dir).")
     return 0
 end
 

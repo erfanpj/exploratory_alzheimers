@@ -70,3 +70,35 @@ end
     @test round(a.Value[2]; digits = 4) == 74.8421 && a.Value[3] == 75 && round(a.Value[4]; digits = 5) == 9.14998
     @test a.Value[5] == 60 && a.Value[6] == 90
 end
+
+@testset "E2.03 intervals, bands and figures" begin
+    # Wilson reference values (k=0,n=10 and k=5,n=10), checked against the closed form.
+    lo, hi = wilson_ci(0, 10); @test lo == 0 && isapprox(hi, 0.2775; atol = 1e-4)
+    lo, hi = wilson_ci(5, 10); @test isapprox(lo, 0.2366; atol = 1e-4) && isapprox(hi, 0.7634; atol = 1e-4)
+    @test all(ismissing, wilson_ci(0, 0))
+    @test_throws ArgumentError wilson_ci(3, 2)
+    @test age_band(60) == "60–64" && age_band(84) == "80–84" && age_band(85) == "85–90" && age_band(90) == "85–90"
+    @test_throws ArgumentError age_band(59)
+    toy = DataFrame(Age = [60, 61, 70, 90], Smoking = [0, 0, 1, 1], Diagnosis = [1, 0, 0, 1])
+    p = prevalence_by(toy, :Smoking)
+    @test p.group == ["No", "Yes"] && p.n == [2, 2] && p.cases == [1, 1] && all(p.ci95_low .<= p.proportion .<= p.ci95_high)
+    @test sum(prevalence_by(toy, :AgeBand).n) == 4
+    @test nrow(prevalence_by(toy[1:0, :], :Smoking)) == 0
+    svg = svg_prevalence(p, "toy <test>")
+    @test startswith(svg, "<svg") && occursin("(1/2)", svg) && occursin("toy &lt;test&gt;", svg)
+    toy.MMSE = [0.0, 29.9, 30.0, 15.0]
+    h = svg_histogram(toy, :MMSE, collect(0:3:30), "toy")
+    @test occursin("n = 2", h) && occursin("27–30: 2", h)   # 29.9 and 30.0 both land in the last bin
+end
+
+@testset "real file: E2.03 tables" begin
+    raw = load_data(joinpath(@__DIR__, "..", "alzheimers_disease_data.csv"))
+    full, rep = clean_data(raw; columns = ANALYSIS_COLUMNS)
+    @test rep.rows_out == 2149
+    for c in vcat([:AgeBand], PREVALENCE_COLUMNS)
+        t = prevalence_by(full, c)
+        @test sum(t.n) == 2149 && sum(t.cases) == 760
+    end
+    m = numeric_by_diagnosis(full, :MMSE)
+    @test sum(m.n) == 2149 && m.n == [1389, 760]
+end
